@@ -3,7 +3,7 @@ import time
 import pytz
 from flask import Blueprint, request, jsonify, current_app
 from app.extensions import db, mail
-from app.models import Book, Borrow
+from app.models import Book, Borrow, Debt
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from app.utils.decorators import role_required
 from datetime import datetime, timedelta
@@ -12,8 +12,8 @@ from threading import Thread
 
 borrow_bp = Blueprint('borrow', __name__)
 
-BORROW_DAYS_LIMIT = 14
-FINE_PER_DAY = 2.0  
+BORROW_DAYS_LIMIT = -14
+FINE_PER_DAY = 20  
 kenya_tz = pytz.timezone("Africa/Nairobi")
 
 def send_async_email(app, msg):
@@ -99,12 +99,20 @@ def borrow_book():
             return jsonify({'msg': 'Book is currently unavailable'}), 400
 
         user_id = get_jwt_identity()
-        claims = get_jwt() 
+        claims = get_jwt()
+        role = claims.get("role")
         user_email = claims.get("email")
 
         # print(f"Decoded JWT Identity: {user_id}")
         # print(f"Decoded JWT Role: {user_role}")
         # print(f"Decoded JWT Email: {user_email}")
+
+        if role == "member":
+            unpaid_debt = Debt.query.filter_by(user_id=user_id, paid=False).first()
+            if unpaid_debt:
+                return jsonify({
+                    'msg': 'You have an unpaid debt. Please settle it before borrowing more books.',
+                }), 403
 
         existing_borrow = Borrow.query.filter_by(user_id=user_id, book_id=book_id, returned=False).first()
         if existing_borrow:
@@ -166,6 +174,16 @@ def return_book(book_id):
         borrow_record.fine = fine_amount
         borrow_record.returned = True
         book.available_copies += 1
+
+        if overdue_days > 0:
+            debt = Debt(
+                user_id=user_id,
+                book_id=book_id,
+                days_overdue=overdue_days,
+                fine_amount=fine_amount,
+                paid=False
+            )
+            db.session.add(debt)
 
         db.session.commit()
 

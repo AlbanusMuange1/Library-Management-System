@@ -5,6 +5,7 @@ from app.models import User
 from app.schemas.user import UserSchema
 from flask_jwt_extended import jwt_required
 from app.utils.decorators import role_required
+from sqlalchemy.exc import IntegrityError
 
 members_bp = Blueprint('members', __name__)
 user_schema = UserSchema()
@@ -67,6 +68,8 @@ def update_member(user_id):
 def delete_member(user_id):
     try:
         member = User.query.get_or_404(user_id)
+        if not member:
+            return jsonify({'msg': 'Member not found or already deleted'}), 404
 
         if member.role == 'admin':
             return jsonify({'msg': 'Admins cannot be deleted'}), 403
@@ -74,5 +77,10 @@ def delete_member(user_id):
         db.session.delete(member)
         db.session.commit()
         return jsonify({'msg': 'Member deleted successfully'}), 200
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'msg': 'Cannot delete member due to related records (e.g., borrow history)'}), 409
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        db.session.rollback()
+        return jsonify({'error': 'An unexpected error occurred', 'details': str(e)}), 500

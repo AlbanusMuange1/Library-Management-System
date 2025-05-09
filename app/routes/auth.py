@@ -8,7 +8,6 @@ from flask import Blueprint, request, jsonify
 from app.extensions import db, mail
 from app.models import User
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
-from werkzeug.security import generate_password_hash
 from flask_mail import Message
 
 
@@ -78,10 +77,8 @@ def register():
 
         email = html.escape(email)
 
-        hashed_password = generate_password_hash(password)
-
         user = User(name=name, email=email, role=role)
-        user.set_password(hashed_password)
+        user.set_password(password)
 
         db.session.add(user)
         db.session.commit()
@@ -101,7 +98,7 @@ def login():
         if not isinstance(data, dict):
             return jsonify({'msg': 'Invalid request format'}), 400
         
-        email = str(data.get('email', '')).strip()
+        email = str(data.get('email', '')).strip().lower()
         password = str(data.get('password', '')).strip()
         # print("Received data", email, password)
 
@@ -114,12 +111,13 @@ def login():
         email = html.escape(email)
 
         user = User.query.filter_by(email=email).first()
+        # print(f"Check password: {user.check_password(password)}")
         
         if not user or not user.check_password(password):
             return jsonify({'msg': 'Invalid email or password'}), 401
         
         verification_code = generate_verification_code(email)
-        msg = Message('Your 2FA Verification Code', recipients=[email])
+        msg = Message('Kenya Library Verification Code', recipients=[email])
         msg.body = f"Your 2FA verification code is: {verification_code}\nThis code expires in 10 minutes."
         mail.send(msg)
 
@@ -219,7 +217,7 @@ def reset_password():
     if not user:
         return jsonify({'msg': 'User not found'}), 404
     
-    user.password = generate_password_hash(new_password)
+    user.set_password(new_password)
     db.session.commit()
 
     del VERIFICATION_CODES[email]

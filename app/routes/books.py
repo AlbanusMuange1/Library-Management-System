@@ -99,3 +99,37 @@ def delete_book(book_id):
      except Exception as e:
         db.session.rollback()
         return jsonify({'msg': 'An error occurred', 'error': str(e)}), 500
+
+@books_bp.route('/search', methods=['GET'])
+def search_books():
+    try:
+          title = request.args.get('title', '').strip().lower()
+          author = request.args.get('author', '').strip().lower()
+          category = request.args.get('category', '').strip().lower()
+
+          query = Book.query
+          if title:
+               query = query.filter(Book.title.ilike(f'%{title}%'))
+          if author:
+               query = query.filter(Book.author.ilike(f"%{author}%"))
+          if category:
+               query = query.filter(Book.category.ilike(f"%{category}%"))
+          
+          books = query.all()
+          if not books:
+               return jsonify({'msg': 'No books found'}), 404
+          
+          return jsonify({
+            'books': [
+                {'id': book.id, 'title': book.title, 'author': book.author, 
+                 'category': book.category, 'available_copies': book.available_copies}
+                for book in books
+                    ]
+               }), 200
+    except Exception as e:
+         return jsonify({'msg': 'An error occurred', 'error': str(e)})
+
+
+
+
+                

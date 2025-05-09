@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from .extensions import db, bcrypt
+from datetime import datetime, timedelta
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -33,3 +34,19 @@ class Borrow(db.Model):
     due_date = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp())
     fine = db.Column(db.Float, default=0.0)
     returned = db.Column(db.Boolean, default=False)
+
+    user = db.relationship('User', backref='borrows')
+    book = db.relationship('Book', backref='borrows')
+
+class Debt(db.Model):
+    __tablename__ = 'debts'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    book_id = db.Column(db.Integer, db.ForeignKey('book.id'), nullable=False)
+    days_overdue = db.Column(db.Integer, nullable=False)
+    fine_amount = db.Column(db.Float, nullable=False)
+    paid = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.utcnow() + timedelta(hours=3))
+
+    user = db.relationship('User', backref='debts')
+    book = db.relationship('Book', backref='debts')
